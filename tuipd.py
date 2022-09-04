@@ -7,6 +7,7 @@ import ansiblelib
 import signal
 import os
 import sys
+import pyperclip
 
 
 
@@ -175,6 +176,8 @@ class UserMenu(npyscreen.ActionPopup):
                 user = pd.get_chat('user', 'duty')
                 usrlist.append(user)
         self.parentApp.selected_userlist = usrlist
+        if self.parentApp.mainform.messageform.entry_widget.value is not None:
+            self.parentApp.mainform.grub_the_data()
         self.parentApp.switchForm("MAIN")
 
     def on_cancel(self):
@@ -215,6 +218,11 @@ class Confirmation(npyscreen.ActionPopup):
 
 
 class NOCTool(npyscreen.FormBaseNew):
+    def __init__(self, name=None, parentApp=None, framed=None, help=None, color='FORMDEFAULT',
+                 widget_list=None, cycle_widgets=False, *args, **keywords):
+        super().__init__(name, parentApp, framed, help, color, widget_list, cycle_widgets, args, keywords)
+        self.message_gen = None
+
     def create(self):
         handlers_dict = {
             ord('?'): self.faq,
@@ -231,16 +239,15 @@ class NOCTool(npyscreen.FormBaseNew):
         self.resolve_all = self.add(Button, name='Resolve all Alerts', rely=18, relx=25, when_pressed_function=self.resolve_all)
         self.chat = self.add(Button, name='Select Chat(s)', rely=20, when_pressed_function=self.select_chat)
         self.user = self.add(Button, name="Select User(s)", rely=20, relx=25, when_pressed_function=self.select_user)
-        self.action = self.add(Button, name='Action', rely=20, relx=45, when_pressed_function=self.select_action)
+        #self.action = self.add(Button, name='Action', rely=20, relx=45, when_pressed_function=self.select_action)
         self.messageform = self.add(Preview_Window, name='Prewiev the message', max_height=10)
         self.grubbutton = self.add(Button, name='Generate message', when_pressed_function=self.grub_the_data)
+        self.copy_to_clipboard_button = self.add(Button, name='Copy to clipboard', when_pressed_function=self.copy_to_clipboard)
         self.sendbutton = self.add(Button, name='SEND MESSAGE', relx=120, when_pressed_function=self.confirm_send)
         self.how_exited_handers[npyscreen.wgwidget.EXITED_ESCAPE] = self.exit_app
 
     def while_waiting(self):
-        self.alertdict = pd.get_alerts()
-        self.pdinfo.values = self.alertdict.get('alerts')
-        self.pdinfo.display()
+        self.update_data()
 
     def select_chat(self):
         self.parentApp.switchForm("CHAT")
@@ -261,6 +268,7 @@ class NOCTool(npyscreen.FormBaseNew):
     def faq(self, key):
         npyscreen.notify_confirm('? -- this message\n'
                                  'r -- resolve chosen incident')
+
     def resolve(self, key):
         try:
             index = self.pdinfo.value[0]
@@ -288,21 +296,26 @@ class NOCTool(npyscreen.FormBaseNew):
         self.pdinfo.display()
         self.updbutton.value = False
 
+    def copy_to_clipboard(self):
+        copied_text = pyperclip.copy(self.message_gen)
+        npyscreen.notify_confirm('Copied')
+
     def grub_the_data(self):
         if self.pdinfo.value != []:
             # self.parentApp.switchForm("SECOND")
             index = self.pdinfo.value[0]
             alert = pd.get_current_alert(self.alertdict.get('id')[index])
             self.parentApp.actionmenu.host.entry_widget.value = alert.get('hostname')
-            if alert.get('hostname') == 'Graphite':
-                npyscreen.notify_confirm('Source is Graphite actions is impossible', title='Error')
-            else:
-                print(self.parentApp.the_alert)
-                with open('inventory/hosts', 'w+') as f:
-                    ready_host = ansiblelib.convert_hosts(str(alert.get('hostname')))
-                    yaml = 'all:\n  hosts:\n    {}:'.format(ready_host)
-                    f.write(yaml)
-                    f.close()
+#            if alert.get('hostname') == 'Graphite':
+#
+#                npyscreen.notify_confirm('Source is Graphite actions is impossible', title='Error')
+#            else:
+#                print(self.parentApp.the_alert)
+#                with open('inventory/hosts', 'w+') as f:
+#                    ready_host = ansiblelib.convert_hosts(str(alert.get('hostname')))
+#                    yaml = 'all:\n  hosts:\n    {}:'.format(ready_host)
+#                    f.write(yaml)
+#                    f.close()
             host = 'Хост/Источник: {} \n'.format(alert.get('hostname'))
             check = 'Чек: {}\n'.format(alert.get('checkname'))
             self.output = 'Вывод: \n{}'.format(alert.get('output'))
@@ -315,10 +328,10 @@ class NOCTool(npyscreen.FormBaseNew):
                 self.output = 'Output in the file below'
                 # self.output = 'Вывод: \n\/paste [output]\n{}'.format(alert.get('output'))
 
-            message_gen = host + check + self.output
-            if self.parentApp.selected_userlist != None:
-                message_gen = pd.unpack(self.parentApp.selected_userlist) + '\n' + message_gen
-            self.messageform.entry_widget.value = message_gen
+            self.message_gen = host + check + self.output
+            if self.parentApp.selected_userlist is not None:
+                self.message_gen = pd.unpack(self.parentApp.selected_userlist) + '\n' + self.message_gen
+            self.messageform.entry_widget.value = self.message_gen
             self.messageform.display()
 
 
