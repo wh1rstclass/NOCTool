@@ -216,20 +216,31 @@ class Confirmation(npyscreen.ActionPopup):
 
 class NOCTool(npyscreen.FormBaseNew):
     def create(self):
+        handlers_dict = {
+            ord('?'): self.faq,
+            ord('r'): self.resolve,
+        }
+        self.add_handlers(handlers_dict)
         self.alertdict = pd.get_alerts()
         self.values = self.alertdict.get('alerts')
         self.add(npyscreen.TitleFixedText, name="This tool need a rework")
         self.button = self.add(Ackbutton, max_height=2, values=['On', 'Off'], name="Autoack", scroll_exit=True)
         self.add(npyscreen.TitleFixedText, max_height=2, name="Duty OPS Today is: {}".format(pd.who_duty()))
-        self.how_exited_handers[npyscreen.wgwidget.EXITED_ESCAPE] = self.exit_app
-        self.pdinfo = self.add(PDinfo, values=self.values, max_height=10, scroll_exit=True)
+        self.pdinfo = self.add(PDinfo, name='alerts in PD', values=self.values, max_height=10, scroll_exit=True)
         self.updbutton = self.add(Button, name='Update', when_pressed_function=self.update_data)
+        self.resolve_all = self.add(Button, name='Resolve all Alerts', rely=18, relx=25, when_pressed_function=self.resolve_all)
         self.chat = self.add(Button, name='Select Chat(s)', rely=20, when_pressed_function=self.select_chat)
         self.user = self.add(Button, name="Select User(s)", rely=20, relx=25, when_pressed_function=self.select_user)
         self.action = self.add(Button, name='Action', rely=20, relx=45, when_pressed_function=self.select_action)
         self.messageform = self.add(Preview_Window, name='Prewiev the message', max_height=10)
         self.grubbutton = self.add(Button, name='Generate message', when_pressed_function=self.grub_the_data)
         self.sendbutton = self.add(Button, name='SEND MESSAGE', relx=120, when_pressed_function=self.confirm_send)
+        self.how_exited_handers[npyscreen.wgwidget.EXITED_ESCAPE] = self.exit_app
+
+    def while_waiting(self):
+        self.alertdict = pd.get_alerts()
+        self.pdinfo.values = self.alertdict.get('alerts')
+        self.pdinfo.display()
 
     def select_chat(self):
         self.parentApp.switchForm("CHAT")
@@ -246,6 +257,30 @@ class NOCTool(npyscreen.FormBaseNew):
     def exit_app(self):
         self.parentApp.setNextForm(None)
         self.editing = False
+
+    def faq(self, key):
+        npyscreen.notify_confirm('? -- this message\n'
+                                 'r -- resolve chosen incident')
+    def resolve(self, key):
+        try:
+            index = self.pdinfo.value[0]
+            alert_id = self.alertdict.get('id')[index]
+            resolve = pd.resolve(alert_id)
+            if resolve == 200:
+                npyscreen.notify_confirm('Succsess')
+                self.update_data()
+        except IndexError:
+            npyscreen.notify_confirm("There is no alert chosen, or no alerts in PD", editw=10)
+
+    def resolve_all(self):
+        try:
+            alerts = self.alertdict.get('id')
+            for alert in alerts:
+                pd.resolve(alert)
+            npyscreen.notify_confirm('ALL ALERTS RESOLVED', 5)
+            self.update_data()
+        except IndexError:
+          npyscreen.notify_confirm("There is no alert chosen, or no alerts in PD", editw=10)
 
     def update_data(self):
         self.alertdict = pd.get_alerts()
@@ -285,6 +320,7 @@ class NOCTool(npyscreen.FormBaseNew):
                 message_gen = pd.unpack(self.parentApp.selected_userlist) + '\n' + message_gen
             self.messageform.entry_widget.value = message_gen
             self.messageform.display()
+
 
 
 if __name__ == "__main__":
